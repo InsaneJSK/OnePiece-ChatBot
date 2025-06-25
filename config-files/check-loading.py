@@ -1,16 +1,36 @@
-from langchain_community.vectorstores import Chroma
-from langchain.embeddings import HuggingFaceEmbeddings
+from langchain_qdrant import Qdrant
+from langchain_huggingface import HuggingFaceEmbeddings
+from qdrant_client import QdrantClient
+import os
+from dotenv import load_dotenv
 
+load_dotenv()
+
+# ----------- Embedding Model -------------
 embedding = HuggingFaceEmbeddings(
     model_name="sentence-transformers/all-MiniLM-L6-v2"
 )
 
-db = Chroma(
-    collection_name="one_piece_wiki",
-    persist_directory="..\chroma_db",
-    embedding_function=embedding
+# ----------- Qdrant Client Setup -------------
+qdrant_url = os.getenv("qdrant_url")
+qdrant_api_key = os.getenv("qdrant_api_key")
+collection_name = "one_piece_wiki"
+
+client = QdrantClient(
+    url=qdrant_url,
+    api_key=qdrant_api_key,
 )
 
-query = "What episode did oden die?"
-retireved_results=db.similarity_search(query)
-print(retireved_results)
+# ----------- Load VectorStore from Qdrant -------------
+db = Qdrant(
+    client=client,
+    collection_name=collection_name,
+    embeddings=embedding,
+)
+
+# ----------- Perform Search -------------
+query = "What episode did Oden die?"
+retrieved_results = db.similarity_search(query)
+
+for i, doc in enumerate(retrieved_results, 1):
+    print(doc.page_content)

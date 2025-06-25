@@ -4,8 +4,9 @@ from langchain_groq import ChatGroq
 from langchain.chains.combine_documents import create_stuff_documents_chain
 from langchain_core.prompts import ChatPromptTemplate
 from langchain.chains import create_retrieval_chain
-from langchain_community.vectorstores import Chroma
-from langchain.embeddings import HuggingFaceEmbeddings
+from langchain_qdrant import Qdrant
+from langchain_huggingface import HuggingFaceEmbeddings
+from qdrant_client import QdrantClient
 
 from dotenv import load_dotenv
 load_dotenv()
@@ -52,15 +53,24 @@ st.markdown('<div class="subtitle">"The sea whispers... ask what you dare about 
 
 st.divider()
 
+qdrant_url = "https://4016fa11-07e6-4e50-962f-99033364cd6a.eu-west-1-0.aws.cloud.qdrant.io:6333"
+qdrant_api_key = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhY2Nlc3MiOiJtIn0.dKBwh2ZyG1hs7LSxPjSdfLE_pOdXAX_j5EMFE7CqjdA"
+
+
 @st.cache_resource(show_spinner="Loading vector DB...")
 def load_vector_db():
     embedding = HuggingFaceEmbeddings(
         model_name="sentence-transformers/all-MiniLM-L6-v2"
     )
-    return Chroma(
+    client = QdrantClient(
+        url=os.getenv("qdrant_url"),
+        api_key=os.getenv("qdrant_api_key"),
+    )
+
+    return Qdrant(
+        client=client,
         collection_name="one_piece_wiki",
-        persist_directory="chroma_db",
-        embedding_function=embedding
+        embeddings=embedding
     )
 
 @st.cache_resource(show_spinner="Connecting with groq...")

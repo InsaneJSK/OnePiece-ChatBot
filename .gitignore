@@ -7,3 +7,5 @@ config-files/onepiece_dump.xml
 
 #Vector-Store
 chroma_db/
+
+venv/

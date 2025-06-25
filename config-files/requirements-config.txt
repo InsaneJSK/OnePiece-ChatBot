@@ -1,0 +1,7 @@
+mwparserfromhell
+tqdm
+langchain
+langchain-huggingface
+langchain-qdrant
+python-dotenv
+sentence-transformers
