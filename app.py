@@ -48,10 +48,6 @@ st.markdown(
     unsafe_allow_html=True
 )
 
-
-st.markdown('<div class="title">🔮 Madame Shyarly\'s Prophecies 🔮</div>', unsafe_allow_html=True)
-st.markdown('<div class="subtitle">"The sea whispers... ask what you dare about the world of One Piece."</div>', unsafe_allow_html=True)
-
 st.divider()
 
 qdrant_url = "https://4016fa11-07e6-4e50-962f-99033364cd6a.eu-west-1-0.aws.cloud.qdrant.io:6333"
@@ -124,12 +120,18 @@ def initialize_llm():
 
 retrieval_chain = initialize_llm()
 
+st.markdown('<div class="title">🔮 Madame Shyarly\'s Prophecies 🔮</div>', unsafe_allow_html=True)
+st.markdown('<div class="subtitle">"The sea whispers... ask what you dare about the world of One Piece."</div>', unsafe_allow_html=True)
+
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
+user_avatar = st.get_asset_url("assets/user.png")
+shyarly_avatar = st.get_asset_url("assets/shyarly.jpg")
+
 # Display previous messages
 for msg in st.session_state.messages:
-    avatar = "assets/user.png" if msg["role"] == "user" else "assets/shyarly.jpg"
+    avatar = user_avatar if msg["role"] == "user" else shyarly_avatar
     with st.chat_message(msg["role"], avatar=avatar):
         st.markdown(msg["content"])
 
@@ -151,7 +153,7 @@ chat_history_text = "\n".join(
 if user_input:
     # Show user message
     st.session_state.messages.append({"role": "user", "content": user_input})
-    with st.chat_message("user", avatar="assets/user.png"):
+    with st.chat_message("user", avatar=user_avatar):
         st.markdown(user_input)
 
     with st.spinner("Madame Shyarly peers into the sea..."):
@@ -170,7 +172,7 @@ if user_input:
 
     # Show assistant message
     st.session_state.messages.append({"role": "assistant", "content": answer})
-    with st.chat_message("assistant", avatar="assets/shyarly.jpg"):
+    with st.chat_message("assistant", avatar=shyarly_avatar):
         st.markdown(f"{answer}")
 
     # Optional: Expand to show sources
