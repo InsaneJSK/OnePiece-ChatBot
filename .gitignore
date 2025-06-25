@@ -1,0 +1,9 @@
+#Secrets
+.env
+
+#Large files for vector computation
+config-files/onepiece_clean.json
+config-files/onepiece_dump.xml
+
+#Vector-Store
+chroma_db/
