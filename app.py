@@ -8,6 +8,7 @@ from langchain_qdrant import Qdrant
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain.chains import create_history_aware_retriever
 from qdrant_client import QdrantClient
+import base64
 
 from dotenv import load_dotenv
 load_dotenv()
@@ -50,8 +51,8 @@ st.markdown(
 
 st.divider()
 
-qdrant_url = "https://4016fa11-07e6-4e50-962f-99033364cd6a.eu-west-1-0.aws.cloud.qdrant.io:6333"
-qdrant_api_key = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhY2Nlc3MiOiJtIn0.dKBwh2ZyG1hs7LSxPjSdfLE_pOdXAX_j5EMFE7CqjdA"
+qdrant_url = os.getenv("qdrant_url")
+qdrant_api_key = os.getenv("qdrant_api_key")
 
 
 @st.cache_resource(show_spinner="Loading vector DB...")
@@ -126,8 +127,13 @@ st.markdown('<div class="subtitle">"The sea whispers... ask what you dare about 
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
-user_avatar = st.get_asset_url("assets/user.png")
-shyarly_avatar = st.get_asset_url("assets/shyarly.jpg")
+def get_base64_image(image_path):
+    with open(image_path, "rb") as f:
+        return "data:image/png;base64," + base64.b64encode(f.read()).decode()
+
+user_avatar = get_base64_image("assets/user.png")
+shyarly_avatar = get_base64_image("assets/shyarly.jpg")
+
 
 # Display previous messages
 for msg in st.session_state.messages:
