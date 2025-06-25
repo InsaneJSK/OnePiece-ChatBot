@@ -6,6 +6,7 @@ from langchain_core.prompts import ChatPromptTemplate
 from langchain.chains import create_retrieval_chain
 from langchain_qdrant import Qdrant
 from langchain_huggingface import HuggingFaceEmbeddings
+from langchain.chains import create_history_aware_retriever
 from qdrant_client import QdrantClient
 
 from dotenv import load_dotenv
@@ -73,6 +74,18 @@ def load_vector_db():
         embeddings=embedding
     )
 
+CONDENSE_PROMPT = ChatPromptTemplate.from_template(
+    """
+    Given the chat history and the latest user question, rewrite the question to be a standalone question.
+    
+    Chat History:
+    {chat_history}
+
+    Follow Up Input: {input}
+    Standalone question:
+    """
+)
+
 @st.cache_resource(show_spinner="Connecting with groq...")
 def initialize_llm():
     llm=ChatGroq(groq_api_key=groq_api_key,
@@ -83,7 +96,8 @@ def initialize_llm():
     Answer the questions based on the provided context only. Always answer prioritizing manga over anime and them over everything else.
     If factual data is needed, such as numbers, try to retrieve them!
     Please provide the most accurate response based on the question.
-    You don't have to quote the context, just make sure you stay factually correct.
+    Never mention the fact that you're given a context, instead say based on the wisdom you have!
+    Also, before giving up, try finding the answers across the context, not just the body but also the metadata
     If you don't know about something, openly claim that you don't know, instead of making up information.
     <context>
     {context}
@@ -94,12 +108,19 @@ def initialize_llm():
     )
     db = load_vector_db()
     retriever = db.as_retriever(
-        search_kwargs={"k": 3},
+        search_kwargs={"k": 8},
         search_type="mmr"
     )
+    retriever_with_memory = create_history_aware_retriever(
+        llm=llm,
+        retriever=retriever,
+        prompt=CONDENSE_PROMPT,
+    )
     document_chain = create_stuff_documents_chain(llm, prompt)
-    retrieval_chain = create_retrieval_chain(retriever, document_chain)
+    retrieval_chain = create_retrieval_chain(retriever_with_memory, document_chain)
+
     return retrieval_chain
+
 
 retrieval_chain = initialize_llm()
 
@@ -108,7 +129,7 @@ if "messages" not in st.session_state:
 
 # Display previous messages
 for msg in st.session_state.messages:
-    avatar = "assets\\user.png" if msg["role"] == "user" else "assets\\shyarly.jpg"
+    avatar = "assets/user.png" if msg["role"] == "user" else "assets/shyarly.jpg"
     with st.chat_message(msg["role"], avatar=avatar):
         st.markdown(msg["content"])
 
@@ -130,7 +151,7 @@ chat_history_text = "\n".join(
 if user_input:
     # Show user message
     st.session_state.messages.append({"role": "user", "content": user_input})
-    with st.chat_message("user", avatar="assets\\user.png"):
+    with st.chat_message("user", avatar="assets/user.png"):
         st.markdown(user_input)
 
     with st.spinner("Madame Shyarly peers into the sea..."):
@@ -138,7 +159,10 @@ if user_input:
             combined_input = f"{chat_history_text}\nUser: {user_input}" if chat_history_text else user_input
             if len(combined_input) > 1500:
                 combined_input = combined_input[-1500:]
-            response = retrieval_chain.invoke({"input": combined_input})
+            response = retrieval_chain.invoke({
+                "input": user_input,
+                "chat_history": chat_history_text
+            })
             answer = response["answer"]
         except Exception as e:
             answer = "⚠️ I couldn't divine an answer. Something went wrong."
@@ -146,7 +170,7 @@ if user_input:
 
     # Show assistant message
     st.session_state.messages.append({"role": "assistant", "content": answer})
-    with st.chat_message("assistant", avatar="assets\\shyarly.jpg"):
+    with st.chat_message("assistant", avatar="assets/shyarly.jpg"):
         st.markdown(f"{answer}")
 
     # Optional: Expand to show sources
