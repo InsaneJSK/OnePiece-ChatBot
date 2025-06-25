@@ -7,6 +7,7 @@ from langchain.chains import create_retrieval_chain
 from langchain_qdrant import Qdrant
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain.chains import create_history_aware_retriever
+from langchain.retrievers.multi_query import MultiQueryRetriever
 from qdrant_client import QdrantClient
 import base64
 
@@ -49,8 +50,6 @@ st.markdown(
     unsafe_allow_html=True
 )
 
-st.divider()
-
 qdrant_url = os.getenv("qdrant_url")
 qdrant_api_key = os.getenv("qdrant_api_key")
 
@@ -85,8 +84,8 @@ CONDENSE_PROMPT = ChatPromptTemplate.from_template(
 
 @st.cache_resource(show_spinner="Connecting with groq...")
 def initialize_llm():
-    llm=ChatGroq(groq_api_key=groq_api_key,
-             model_name="llama-3.3-70b-versatile")
+    llm_main = ChatGroq(groq_api_key=groq_api_key, model_name="llama-3.3-70b-versatile")
+    llm_light = ChatGroq(groq_api_key=groq_api_key, model_name="llama-3.1-8b-instant")
     prompt=ChatPromptTemplate.from_template(
     """
     You are Madame Shyarly, a retired fortune teller who knows everything there is to know about the one piece anime and manga!
@@ -104,23 +103,29 @@ def initialize_llm():
     """
     )
     db = load_vector_db()
-    retriever = db.as_retriever(
+    basic_retriever = db.as_retriever(
         search_kwargs={"k": 8},
         search_type="mmr"
     )
+
+    multi_query_retriever = MultiQueryRetriever.from_llm(
+        retriever=basic_retriever,
+        llm=llm_light
+    )
     retriever_with_memory = create_history_aware_retriever(
-        llm=llm,
-        retriever=retriever,
+        llm=llm_light,
+        retriever=multi_query_retriever,
         prompt=CONDENSE_PROMPT,
     )
-    document_chain = create_stuff_documents_chain(llm, prompt)
+
+    document_chain = create_stuff_documents_chain(llm_main, prompt)
     retrieval_chain = create_retrieval_chain(retriever_with_memory, document_chain)
 
     return retrieval_chain
 
 
 retrieval_chain = initialize_llm()
-
+st.divider()
 st.markdown('<div class="title">🔮 Madame Shyarly\'s Prophecies 🔮</div>', unsafe_allow_html=True)
 st.markdown('<div class="subtitle">"The sea whispers... ask what you dare about the world of One Piece."</div>', unsafe_allow_html=True)
 
