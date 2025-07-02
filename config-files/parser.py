@@ -1,40 +1,64 @@
 import xml.etree.ElementTree as ET
 import mwparserfromhell
+import json
 from tqdm import tqdm
 
-def parse_wiki_dump(xml_path, output_path=None):
+def extract_categories(wikicode):
+    # Collect categories from wikilinks
+    categories = [
+        str(link.title).split(":", 1)[1].strip()
+        for link in wikicode.ifilter_wikilinks()
+        if str(link.title).lower().startswith("category:")
+    ]
+    return list(set(categories))  # remove duplicates
+
+def extract_headings(wikicode):
+    return [
+        str(h.title).strip()
+        for h in wikicode.filter_headings()
+        if h.level in {2, 3}
+    ]
+
+def parse_structured_articles(xml_path, output_path=None):
     context = ET.iterparse(xml_path, events=("end",))
-    pages = []
+    articles = []
 
-    for event, elem in tqdm(context, desc="Parsing pages"):
+    for event, elem in tqdm(context, desc="Parsing articles"):
         if elem.tag.endswith("page"):
-            title = elem.find("./{*}title").text
             ns = elem.find("./{*}ns").text
+            if ns != "0":
+                elem.clear()
+                continue  # Skip non-main articles
+
+            title = elem.find("./{*}title").text
             text_elem = elem.find(".//{*}text")
-            text = text_elem.text if text_elem is not None else ""
+            raw_text = text_elem.text or ""
 
-            # Only main article content (ns == "0")
-            if ns == "0" and text:
-                wikicode = mwparserfromhell.parse(text)
-                plain_text = wikicode.strip_code()
+            wikicode = mwparserfromhell.parse(raw_text)
+            content = wikicode.strip_code().strip()
+            if len(content) < 300:
+                elem.clear()
+                continue  # Skip stubs
 
-                if len(plain_text.strip()) > 200:  # Ignore stubs
-                    pages.append({
-                        "title": title,
-                        "content": plain_text.strip()
-                    })
+            headings = extract_headings(wikicode)
+            categories = extract_categories(wikicode)
 
-            # Clear from memory
+            articles.append({
+                "title": title,
+                "categories": categories,
+                "headings": headings,
+                "content": content
+            })
+
             elem.clear()
 
-    print(f"\nParsed {len(pages)} main articles.")
-    
-    if output_path:
-        import json
-        with open(output_path, "w", encoding="utf-8") as f:
-            json.dump(pages, f, ensure_ascii=False, indent=2)
+    print(f"\n✅ Parsed {len(articles)} structured articles with full preservation.")
 
-    return pages
+    if output_path:
+        with open(output_path, "w", encoding="utf-8") as f:
+            json.dump(articles, f, ensure_ascii=False, indent=2)
+
+    return articles
 
 if __name__ == "__main__":
-    articles = parse_wiki_dump("onepiece_dump.xml", output_path="onepiece_clean.json")
+    parse_structured_articles("onepiece_dump.xml", output_path="onepiece_structured.json")

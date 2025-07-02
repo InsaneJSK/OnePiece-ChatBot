@@ -20,15 +20,17 @@ def load_onepiece_json(json_path: str) -> list[Document]:
     for entry in data:
         content = entry.get("content", "").strip()
         title = entry.get("title", "unknown")
+        headings = entry.get("headings", [])
+        categories = entry.get("")
         if content:
-            docs.append(Document(page_content=content, metadata={"source": title}))
+            docs.append(Document(page_content=content, metadata={"source": title, "headings": headings, "categories": categories}))
     return docs
 
 documents = load_onepiece_json("onepiece_clean.json")
 
 splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
 documents = splitter.split_documents(documents)
-print(f"📄 Total chunks after splitting: {len(documents)}")
+print(f"Total chunks after splitting: {len(documents)}")
 
 # ----------- Embedding Model -------------
 embeddings = HuggingFaceEmbeddings(

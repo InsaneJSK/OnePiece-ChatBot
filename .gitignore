@@ -4,8 +4,10 @@
 #Large files for vector computation
 config-files/onepiece_clean.json
 config-files/onepiece_dump.xml
+config-files/onepiece_structured.json
 
 #Vector-Store
 chroma_db/
 
 venv/
+config-files/unique_categories.json
