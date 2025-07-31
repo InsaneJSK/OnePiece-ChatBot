@@ -181,10 +181,10 @@ if user_input:
             answer = "⚠️ I couldn't divine an answer. Something went wrong."
             st.error(str(e))
 
-    # # Show assistant message
-    # st.session_state.messages.append({"role": "assistant", "content": answer})
-    # with st.chat_message("assistant", avatar=shyarly_avatar):
-    #     st.markdown(f"{answer}")
+    # Show assistant message
+    st.session_state.messages.append({"role": "assistant", "content": answer})
+    with st.chat_message("assistant", avatar=shyarly_avatar):
+        st.markdown(f"{answer}")
 
     # # Optional: Expand to show sources
     # with st.expander("📖 Visions from the Sea (source documents)"):
