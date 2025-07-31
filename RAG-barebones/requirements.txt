@@ -1,0 +1,6 @@
+langchain
+langchain-huggingface
+langchain-chroma
+sentence-transformers
+langchain_groq
+langchain_ollama

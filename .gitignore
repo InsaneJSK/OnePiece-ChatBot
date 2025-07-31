@@ -10,4 +10,11 @@ config-files/onepiece_structured.json
 chroma_db/
 
 venv/
+__pycache__/
+
+#Categorical/Alternate Embedding files
 config-files/unique_categories.json
+config-files/cat-embedder-chroma.py
+config-files/embedder-chroma.py
+config-files/unique-cats.py
+config-files/parser-cats.py
