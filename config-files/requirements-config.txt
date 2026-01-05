@@ -5,3 +5,7 @@ langchain-huggingface
 langchain-qdrant
 python-dotenv
 sentence-transformers
+langchain-text-splitters
+hf_xet
+qdrant-client
+langchain-core

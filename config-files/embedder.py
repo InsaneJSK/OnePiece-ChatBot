@@ -1,9 +1,9 @@
 import json
 from tqdm import tqdm
-from langchain.docstore.document import Document
-from langchain.text_splitter import RecursiveCharacterTextSplitter
+from langchain_core.documents import Document
+from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_huggingface import HuggingFaceEmbeddings
-from langchain_community.vectorstores import Qdrant
+from langchain_qdrant import QdrantVectorStore
 from qdrant_client import QdrantClient
 from qdrant_client.http.models import Distance, VectorParams
 import os
@@ -21,9 +21,8 @@ def load_onepiece_json(json_path: str) -> list[Document]:
         content = entry.get("content", "").strip()
         title = entry.get("title", "unknown")
         headings = entry.get("headings", [])
-        categories = entry.get("")
         if content:
-            docs.append(Document(page_content=content, metadata={"source": title, "headings": headings, "categories": categories}))
+            docs.append(Document(page_content=content, metadata={"source": title, "headings": headings}))
     return docs
 
 documents = load_onepiece_json("onepiece_clean.json")
@@ -33,7 +32,7 @@ documents = splitter.split_documents(documents)
 print(f"Total chunks after splitting: {len(documents)}")
 
 # ----------- Embedding Model -------------
-embeddings = HuggingFaceEmbeddings(
+embedding = HuggingFaceEmbeddings(
     model_name="sentence-transformers/all-MiniLM-L6-v2"
 )
 
@@ -46,6 +45,7 @@ collection_name = "one_piece_wiki"
 client = QdrantClient(
     url=qdrant_url,
     api_key=qdrant_api_key,
+    check_compatibility=False
 )
 
 # ❗ Wipe and recreate collection
@@ -55,18 +55,17 @@ client.recreate_collection(
 )
 
 # ----------- Batching Upload -------------
+vectorstore = QdrantVectorStore(
+    client=client,
+    collection_name=collection_name,
+    embedding=embedding
+)
 batch_size = 100
-print(f"🚀 Uploading in batches of {batch_size}...")
+print(f"Uploading in batches of {batch_size}...")
 
 for i in tqdm(range(0, len(documents), batch_size), desc="Uploading to Qdrant"):
     batch = documents[i:i + batch_size]
-    Qdrant.from_documents(
-        documents=batch,
-        embedding=embeddings,
-        url=qdrant_url,
-        api_key=qdrant_api_key,
-        collection_name=collection_name,
-    )
+    vectorstore.add_documents(batch)
 
 # ----------- Final Count Check -------------
 collection_info = client.get_collection(collection_name)

@@ -1,15 +1,16 @@
 import streamlit as st
 import os
 from langchain_groq import ChatGroq
-from langchain.chains.combine_documents import create_stuff_documents_chain
 from langchain_core.prompts import ChatPromptTemplate
-from langchain.chains import create_retrieval_chain
-from langchain_qdrant import Qdrant
+from langchain_qdrant import QdrantVectorStore as Qdrant
 from langchain_huggingface import HuggingFaceEmbeddings
-from langchain.chains import create_history_aware_retriever
-from langchain.retrievers.multi_query import MultiQueryRetriever
 from qdrant_client import QdrantClient
 import base64
+
+#Updated imports
+from langchain_core.runnables import RunnablePassthrough, RunnableParallel, RunnableLambda
+from langchain_core.output_parsers import StrOutputParser
+
 
 from dotenv import load_dotenv
 load_dotenv()
@@ -62,12 +63,13 @@ def load_vector_db():
     client = QdrantClient(
         url=os.getenv("qdrant_url"),
         api_key=os.getenv("qdrant_api_key"),
+        check_compatibility=False
     )
 
     return Qdrant(
         client=client,
         collection_name="one_piece_wiki",
-        embeddings=embedding
+        embedding=embedding
     )
 
 CONDENSE_PROMPT = ChatPromptTemplate.from_template(
@@ -77,10 +79,18 @@ CONDENSE_PROMPT = ChatPromptTemplate.from_template(
     Chat History:
     {chat_history}
 
-    Follow Up Input: {input}
+    Follow Up Input: {question}
     Standalone question:
     """
-)
+) #removes ambiguity by changing {input} to {question}
+
+def make_hashable(obj):
+    if isinstance(obj, dict):
+        return tuple((k, make_hashable(v)) for k, v in sorted(obj.items()))
+    elif isinstance(obj, list):
+        return tuple(make_hashable(v) for v in obj)
+    else:
+        return obj
 
 @st.cache_resource(show_spinner="Connecting with groq...")
 def initialize_llm():
@@ -103,28 +113,90 @@ def initialize_llm():
     """
     )
     db = load_vector_db()
-    basic_retriever = db.as_retriever(
-        search_kwargs={"k": 8},
-        search_type="mmr"
+    def base_retrieve(query: str):
+        return db.similarity_search(
+            query,
+            k=8
+        )
+
+    MULTI_QUERY_PROMPT = ChatPromptTemplate.from_template("""
+    Generate 3 diverse search queries for the following question.
+    Question: {question}
+    """)
+
+    query_expansion = (
+        MULTI_QUERY_PROMPT
+        | llm_light
+        | StrOutputParser()
+        | RunnableLambda(lambda x: [q.strip() for q in x.split("\n") if q.strip()])
     )
 
-    multi_query_retriever = MultiQueryRetriever.from_llm(
-        retriever=basic_retriever,
-        llm=llm_light
+    def retrieve_many(queries):
+        all_docs = []
+        seen = set()
+
+        for q in queries:
+            docs = base_retrieve(q)
+            for d in docs:
+                key = (d.page_content, make_hashable(d.metadata))
+                if key not in seen:
+                    seen.add(key)
+                    all_docs.append(d)
+
+        return all_docs
+    
+    retrieval_parallel = RunnableParallel(
+        original=RunnablePassthrough(),
+        expanded=RunnableLambda(lambda q: query_expansion.invoke({"question": q}))
     )
-    retriever_with_memory = create_history_aware_retriever(
-        llm=llm_light,
-        retriever=multi_query_retriever,
-        prompt=CONDENSE_PROMPT,
+
+    retrieval_runnable = (
+        retrieval_parallel
+        | RunnableLambda(
+            lambda x: retrieve_many([x["original"]] + x["expanded"])
+        )
     )
 
-    document_chain = create_stuff_documents_chain(llm_main, prompt)
-    retrieval_chain = create_retrieval_chain(retriever_with_memory, document_chain)
+    rewrite_chain = (
+    CONDENSE_PROMPT
+    | llm_light
+    | StrOutputParser()
+    )
 
-    return retrieval_chain
+    def format_docs(docs):
+        return "\n\n".join(doc.page_content for doc in docs)
+
+    document_chain = (
+        {
+            "context": lambda x: format_docs(x["docs"]),
+            "input": lambda x: x["input"]
+        }
+        | prompt
+        | llm_main
+        | StrOutputParser()
+    )
+
+    retrieve = RunnableLambda(lambda inputs: {
+        "docs": (
+            retrieval_runnable.invoke(
+                rewrite_chain.invoke({
+                    "chat_history": inputs["chat_history"],
+                    "question": inputs["input"]
+                }) if inputs["chat_history"] else inputs["input"]
+            )
+        ),
+        "input": inputs["input"]
+    })
 
 
-retrieval_chain = initialize_llm()
+    final_chain = (
+        retrieve
+        | document_chain
+    )
+
+    return final_chain
+
+final_chain = initialize_llm()
 st.divider()
 st.markdown('<div class="title">🔮 Madame Shyarly\'s Prophecies 🔮</div>', unsafe_allow_html=True)
 st.markdown('<div class="subtitle">"The sea whispers... ask what you dare about the world of One Piece."</div>', unsafe_allow_html=True)
@@ -172,11 +244,10 @@ if user_input:
             combined_input = f"{chat_history_text}\nUser: {user_input}" if chat_history_text else user_input
             if len(combined_input) > 1500:
                 combined_input = combined_input[-1500:]
-            response = retrieval_chain.invoke({
+            answer = final_chain.invoke({
                 "input": user_input,
                 "chat_history": chat_history_text
             })
-            answer = response["answer"]
         except Exception as e:
             answer = "⚠️ I couldn't divine an answer. Something went wrong."
             st.error(str(e))
@@ -186,9 +257,3 @@ if user_input:
     with st.chat_message("assistant", avatar=shyarly_avatar):
         st.markdown(f"{answer}")
 
-    # # Optional: Expand to show sources
-    # with st.expander("📖 Visions from the Sea (source documents)"):
-    #     for doc in response.get("context", []):
-    #         st.markdown(f"**Source**: {doc.metadata.get('source', 'Unknown')}")
-    #         st.write(doc.page_content[:800])
-    #         st.write("---")

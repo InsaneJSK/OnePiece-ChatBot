@@ -18,3 +18,6 @@ config-files/cat-embedder-chroma.py
 config-files/embedder-chroma.py
 config-files/unique-cats.py
 config-files/parser-cats.py
+
+#Langchain version changes, pre-migration placeholder
+app-downgraded.py

@@ -1,4 +1,4 @@
-from langchain_qdrant import Qdrant
+from langchain_qdrant import QdrantVectorStore as Qdrant
 from langchain_huggingface import HuggingFaceEmbeddings
 from qdrant_client import QdrantClient
 import os
@@ -25,7 +25,7 @@ client = QdrantClient(
 db = Qdrant(
     client=client,
     collection_name=collection_name,
-    embeddings=embedding,
+    embedding=embedding,
 )
 
 # ----------- Perform Search -------------

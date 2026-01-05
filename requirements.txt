@@ -1,7 +1,9 @@
 streamlit
 langchain_groq
 langchain
+langchain_core
 langchain_qdrant
 langchain_huggingface
 python-dotenv
 sentence-transformers
+hf_xet
